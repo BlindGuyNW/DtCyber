@@ -48,6 +48,15 @@ class CyberConsoleText extends CyberConsoleBase {
     this.screenBuffer = null;
     this.screenOffsetColumns = 0
     //
+    // View selection: which screen(s) to show. Mirrors the presentation
+    // control switch on a CC545 (F2/F3/F4 on a CC598B).
+    //
+    this.VIEWS = ['left', 'right', 'dual'];
+    this.view = 'dual';
+    this.currentScreen = 0;
+    this.isVisible = true;
+    this.forceVisible = false;
+    //
     // Shutdown
     //
     this.shutdownListener = null;
@@ -58,7 +67,7 @@ class CyberConsoleText extends CyberConsoleBase {
   }
 
   put(x, y, char, fg = 'brightgreen', bg = 'black') {
-    if (this.screenBuffer) {
+    if (this.screenBuffer && (this.isVisible || this.forceVisible)) {
       this.screenBuffer.put({x: x + this.screenOffsetColumns, y: y, attr: {color: fg, bgColor: bg}}, char);
     }
   }
@@ -111,7 +120,52 @@ class CyberConsoleText extends CyberConsoleBase {
   }
 
   setScreen(screenNumber) {
-    this.screenOffsetColumns = screenNumber === 0 ? 0 : this.SCREEN_WIDTH_COLUMNS + this.SCREEN_GAP_COLUMNS;
+    this.currentScreen = screenNumber === 0 ? 0 : 1;
+    if (this.view === 'dual') {
+      this.screenOffsetColumns = this.currentScreen === 0 ? 0 : this.SCREEN_WIDTH_COLUMNS + this.SCREEN_GAP_COLUMNS;
+      this.isVisible = true;
+    } else {
+      this.screenOffsetColumns = 0;
+      this.isVisible = this.currentScreen === (this.view === 'left' ? 0 : 1);
+    }
+  }
+
+  /*
+   * Select which screen(s) are shown: 'left', 'right', or 'dual'.
+   * NOS always sends both screens; this only affects what is rendered.
+   */
+  setView(view) {
+    if (!this.VIEWS.includes(view)) {
+      throw new Error(`View must be one of: ${this.VIEWS.join(', ')}`);
+    }
+    this.view = view;
+    this.setScreen(this.currentScreen);
+    this.clearScreen();
+    this.drawAllScreen();
+  }
+
+  getView() {
+    return this.view;
+  }
+
+  drawViewLabel() {
+    if (this.screenBuffer && this.view !== 'dual') {
+      let label = this.view === 'left' ? 'LEFT' : 'RIGHT';
+      let x = this.SCREEN_WIDTH_COLUMNS + 2;
+      for (let i = 0; i < label.length; i++) {
+        this.screenBuffer.put({x: x + i, y: 0, attr: {color: 'brightgreen', bgColor: 'black'}}, label[i]);
+      }
+    }
+  }
+
+  displayNotification(font, x, y, s) {
+    // Notifications are always shown, whichever screen is being viewed.
+    this.forceVisible = true;
+    try {
+      super.displayNotification(font, x, y, s);
+    } finally {
+      this.forceVisible = false;
+    }
   }
 
   clearScreen() {
@@ -128,6 +182,7 @@ class CyberConsoleText extends CyberConsoleBase {
 
   updateScreen() {
     if (this.screenBuffer) {
+      this.drawViewLabel();
       this.screenBuffer.draw({delta: true});
       this.clearScreen();
     }
@@ -162,6 +217,15 @@ class CyberConsoleText extends CyberConsoleBase {
       switch (key) {
         case 'CTRL_R' :
           this.drawAllScreen();
+          break;
+        case 'F2' :
+          this.setView('left');
+          break;
+        case 'F3' :
+          this.setView('dual');
+          break;
+        case 'F4' :
+          this.setView('right');
           break;
         case 'CTRL_C' :
         case 'CTRL_D' :

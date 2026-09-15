@@ -18,12 +18,13 @@ const {program} = require('commander');
 const CyberConsoleText = require('./textconsole/js/console-text');
 const Machine = require('./textconsole/js/machine-tcp');
 
-function runTextConsole(machineId, url, port, refresh) {
+function runTextConsole(machineId, url, port, refresh, view) {
   let isRunning = true;
 
   let title = `${machineId} (${url}:${port},  refresh: ${refresh})`;
 
   let cyberConsole = new CyberConsoleText();
+  cyberConsole.setView(view);
   cyberConsole.createScreen();
 
   const machine = new Machine(machineId, url, port);
@@ -88,11 +89,18 @@ function main() {
       return parsedInterval;
     }, 20)
     .option('-m, --machine-id <id>', 'Machine ID', 'nos287')
+    .option('-s, --screen <view>', 'Screen(s) to show: left, right, or dual (F2/F3/F4 switch at runtime)', (value) => {
+      const view = value.toLowerCase();
+      if (!['left', 'right', 'dual'].includes(view)) {
+        throw new Error('Screen must be left, right, or dual.');
+      }
+      return view;
+    }, 'dual')
     .parse(process.argv);
 
   const options = program.opts();
 
-  runTextConsole(options.machineId, options.url, options.port, options.refresh);
+  runTextConsole(options.machineId, options.url, options.port, options.refresh, options.screen);
 }
 
 main();
