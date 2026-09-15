@@ -1,0 +1,51 @@
+~*
+~*  Local modifications applied to the CHESS 4.9 program library when
+~*  the chess49 product is built by chess49.job.
+~*
+~*  PAGEWT - make the "(PAUSING)" page wait resume on a bare carriage
+~*  return under NOS 2. IAF delivers an empty terminal line as an
+~*  end-of-record, and leaves that EOR status on INPUT after every
+~*  line until a fresh READ is issued. RDLINE in deck CODEDIO used to
+~*  hand every EOR to INPEOR, which rereads forever on a terminal, so
+~*  READER's "empty line means continue" test never ran. INPEOR also
+~*  lives in overlay CHESS20, so calling it during a pause overwrote
+~*  the EXPLAIN overlay's text.
+~*
+*IDENT PAGEWT
+*/        TREAT END-OF-RECORD ON A TERMINAL PAGE-WAIT READ AS AN EMPTY
+*/        LINE.  NOS 2 IAF DELIVERS A BARE CARRIAGE RETURN AS EOR, SO
+*/        THE (PAUSING) PROMPT COULD NEVER BE CONTINUED.  THE FIRST EOR
+*/        SEEN AFTER A LINE IS THE STALE STATUS OF THAT LINE AND IS
+*/        SKIPPED BY ISSUING A FRESH READ IN PLACE (NOT VIA INPEOR,
+*/        WHICH LOADS OVERLAY CHESS20 OVER THE CURRENT ONE); THE NEXT
+*/        EOR IS THE USER'S CARRIAGE RETURN.
+*DECK READER
+*I READER.35
+          ENTRY  READERA
+          ENTRY  READERF
+*DECK CODEDIO
+*D CODEDIO.162
+          EQ     RDLINE6           RETURN, FLAG STALE EOR
+*I CODEDIO.164
+ RDLINE4  SA2    =XREADERA         QUESTION ORDINAL
+          PL     X2,RDLINE3        IF NOT PAGE WAIT
+          SA1    RDLINED
+          ZR     X1,RDLINE5        IF EOR IS A REAL EMPTY LINE
+          BX6    X6-X6
+          SA6    A1                CLEAR STALE EOR FLAG
+          READ   INPUT             ISSUE FRESH READ, NO OVERLAY LOAD
+          SA4    =XREADERF         INPUT LINE BUFFER POINTER
+          EQ     RDLINE1           REREAD LINE
+ RDLINE5  SA1    INPUT+1
+          RJ     =XDEVTYP          CHECK DEVICE TYPE
+          PL     X6,RDLINE3        IF ALLOCATABLE
+          SA1    =XREADERF         INPUT LINE BUFFER POINTER
+          BX6    X6-X6
+          SA6    X1                CLEAR FIRST WORD = EMPTY LINE
+ RDLINE6  SX6    B1
+          SA6    RDLINED           NEXT EOR WILL BE STALE
+          EQ     RDLINE            RETURN
+*D CODEDIO.166,167
+ RDLINEB  ZR     X1,RDLINE6        IF NO EOR/EOF, FLAG STALE EOR
+          EQ     RDLINE4           ELSE CHECK PAGE WAIT
+ RDLINED  CON    0                 STALE EOR FLAG
