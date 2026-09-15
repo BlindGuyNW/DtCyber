@@ -349,6 +349,15 @@
         "records": "PROC/CHESS",
         "url": "https://www.dropbox.com/scl/fi/4kuwf7keau3z0ff1tdn5d/chess49.tap?rlkey=uq9b5x9la3twuiiwpkae6trhr&dl=1",
         "desc": "CHESS 4.9"
+      },
+      {
+        "name": "chess49bk",
+        "post": "chess49bk.post",
+        "lib": 70,
+        "records": "PROC/CHESS",
+        "url": "https://www.dropbox.com/scl/fi/amc8hurdu7q5ijx9yy85w/chess46.tap?rlkey=5jinr6rzowzk2p43lzhdtcbok&dl=1",
+        "desc": "CHESS 4.9 openings library (built from the book on the CHESS 4.6 tape)",
+        "depends": ["chess49"]
       }
     ]
   },

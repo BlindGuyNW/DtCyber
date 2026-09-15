@@ -1,0 +1,93 @@
+~*
+~*  This job builds the openings library for CHESS 4.9. The CHESS 4.9
+~*  tape carries no openings book, so the program plays every opening
+~*  from its own search. The CHESS 4.6 tape, however, carries the
+~*  Northwestern openings book as decks W/... and B/... of its program
+~*  library, written in the program's own learning-mode command language
+~*  (INI, LET MSCODE, SWITCH LW/LB/NOR, and moves in descriptive
+~*  notation).
+~*
+~*  The job copies the 4.6 program library from the tape, extracts those
+~*  decks with MODIFY as one record of commands (a modset drops the *WEOR
+~*  directives that would split the record and appends DUMP and END),
+~*  runs CHESS 4.9 with that record as its input file so that it records
+~*  every position and move in its positions library, and saves the
+~*  quick-load dump of the library as CHESBK. The chess49bk.post script
+~*  copies CHESBK to the LIBRARY catalog, and the CHESS procedure, which
+~*  this job also refreshes in the PRODUCT file, passes it to CHESS 4.9
+~*  as the openings library file.
+~*
+~*  Recording the book's roughly 15,000 commands takes CHESS 4.9 about
+~*  ten CPU minutes, so expect this job to run for the better part of an
+~*  hour. Its output lists every command as the program read it, so
+~*  ILLEGAL MOVE or AMBIGUOUS MOVE lines in the job's printout identify
+~*  any deck lines the program could not use.
+~*
+CHESSBK.
+$USER,INSTALL,${../site.cfg:PASSWORDS:INSTALL:INSTALL}.
+$NORERUN.
+$SETTL,*.
+$SETASL,*.
+$SETJSL,*.
+$COPYBR,INPUT,PROC.
+$COPYBR,INPUT,MODS.
+$ASSIGN,${2},TAPE,D=GE,LB=KL,F=I,PO=R.
+$REWIND,TAPE.
+$SKIPF,TAPE.
+$COPY,TAPE,OPL.
+$RETURN,TAPE.
+$REWIND,OPL,MODS.
+$MODIFY,P=OPL,C=BOOK,LO=E,I=MODS.
+$REWIND,BOOK.
+$GET,CHESLIB=CHESS49/UN=LIBRARY.
+$LIBRARY,CHESLIB/A.
+CHESS,BOOK,OUTPUT,LIBRARY.
+$REWIND,CHESBK.
+$REPLACE,CHESBK.
+$ATTACH,PRODUCT/M=W,WB.
+$LIBEDIT,P=PRODUCT,B=PROC,I=0,C.
+***
+*** CHESSBK COMPLETE
+***
+EXIT.
+***
+*** CHESSBK FAILED
+***
+~eor
+~include chess.proc
+~eor
+*IDENT CHESBK
+*/        EXTRACT THE OPENINGS BOOK DECKS FROM THE CHESS 4.6 PROGRAM
+*/        LIBRARY AS ONE RECORD OF LEARNING-MODE COMMANDS FOR CHESS 4.9,
+*/        ENDING WITH A QUICK-LOAD DUMP OF THE RESULTING LIBRARY.
+*/        CASTLING WRITTEN WITH ZEROS IS AMBIGUOUS TO CHESS 4.9, SO THE
+*/        EIGHT SUCH LINES ARE REWRITTEN WITH LETTER O.
+*DECK W/BIRDS
+*D W/BIRDS.1
+*DECK W/RUYW
+*D W/RUYW.1
+*DECK W/SICIL
+*D W/SICIL.1006
+O-O
+*D W/SICIL.1248
+O-O
+*D W/SICIL.1442
+O-O
+*D W/SICIL.1447
+O-O
+*D W/SICIL.1468
+O-O
+*D W/SICIL.1579
+O-O
+*DECK W/GORIN
+*D W/GORIN.539
+O-O
+*D W/GORIN.551
+O-O
+*DECK B/BENON
+*I B/BENON.2294
+DUMP,CHESBK
+END
+*EDIT W/BIRDS,W/RUYW,W/RUYWO,W/PETRF,W/FRNCH,W/SICIL,W/PIRC
+*EDIT W/NIMZO,W/CAROK,W/CENTR,W/ALEKN,W/GORIN
+*EDIT B/BIRDS,B/SICIL,B/ENGLI,B/PETRF,B/KGA,B/CENTR,B/BENON

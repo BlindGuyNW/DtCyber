@@ -1275,6 +1275,7 @@ cases (e.g., Chess games), the games can also be run at an ordinary user termina
 | [chess35](https://www.dropbox.com/scl/fi/iomq72j2f67vibltpefzx/chess35.tap?rlkey=qnxgybhq5l60wkzhqiil6to2n&dl=1) | CHESS 3.5 - [historic Chess game](https://www.chessprogramming.org/Chess_%28Program%29) |
 | [chess46](https://www.dropbox.com/scl/fi/amc8hurdu7q5ijx9yy85w/chess46.tap?rlkey=5jinr6rzowzk2p43lzhdtcbok&dl=1) | CHESS 4.6 - [historic Chess game](https://www.chessprogramming.org/Chess_%28Program%29) |
 | [chess49](https://www.dropbox.com/scl/fi/4kuwf7keau3z0ff1tdn5d/chess49.tap?rlkey=uq9b5x9la3twuiiwpkae6trhr&dl=1) | CHESS 4.9 - [historic Chess game](https://www.chessprogramming.org/Chess_%28Program%29) |
+| [chess49bk](https://www.dropbox.com/scl/fi/amc8hurdu7q5ijx9yy85w/chess46.tap?rlkey=5jinr6rzowzk2p43lzhdtcbok&dl=1) | CHESS 4.9 openings library, built from the Northwestern openings book on the CHESS 4.6 tape |
 
 ### Category *graphics*
 This category includes graphics and CAD/CAM software.
