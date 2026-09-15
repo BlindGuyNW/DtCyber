@@ -1,10 +1,11 @@
 // Print a one-shot text snapshot of the DtCyber console screens (left = A, right = B).
-// Usage: node console-snap.js [seconds-to-listen]   (the console port takes one client at a time)
+// Usage: node console-snap.js [seconds-to-listen [port]]   (the console port takes one client at a time)
 const path = require("path");
-const WT = "C:/git/DtCyber/webterm";
+const WT = __dirname;
 const CyberConsoleBase = require(WT + "/www/js/console-base");
 const Machine = require(WT + "/textconsole/js/machine-tcp");
 const secs = parseFloat(process.argv[2] || "4");
+const port = parseInt(process.argv[3] || "16612", 10);
 class Snap extends CyberConsoleBase {
   constructor() { super(); this.scr = 0; this.grid = [this.blank(), this.blank()]; this.last = null; }
   blank() { return Array.from({length: 52}, () => Array(66).fill(" ")); }
@@ -16,7 +17,7 @@ class Snap extends CyberConsoleBase {
   updateScreen() { this.last = this.grid.map(g => g.map(r => r.join("").replace(/\s+$/, ""))); this.grid = [this.blank(), this.blank()]; }
 }
 const snap = new Snap();
-const m = new Machine("nos287", "127.0.0.1", 16612);
+const m = new Machine("console", "127.0.0.1", port);
 m.setReceivedDataHandler(d => snap.renderText(d));
 m.setConnectListener(() => { m.send(new Uint8Array([0x80, 250, 0x81])); });
 m.createConnection();
