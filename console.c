@@ -228,6 +228,7 @@ char fontName[MaxFontNameSize + 1];
 long heightPX;
 long scaleX;
 long scaleY;
+bool textView;
 long timerRate;
 long widthPX;
 

@@ -665,6 +665,7 @@ extern volatile u64        rtcClock;
 extern bool                rtcClockIsCurrent;
 extern long                scaleX;                          // Console
 extern long                scaleY;                          // Console
+extern bool                textView;                        // Console
 extern long                timerRate;                       // Console
 extern bool                tpMuxEnabled;
 extern u64                 traceMask;

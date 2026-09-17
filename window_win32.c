@@ -52,6 +52,19 @@
 #define TIMER_ID    1
 
 /*
+**  Text view: a read-only multi-line EDIT control that mirrors the
+**  screens as plain text so that screen readers can read the console.
+**  Small-font characters are 8 dots apart horizontally and lines are
+**  10 dots apart vertically, giving a 64 x 52 character grid per screen.
+*/
+#define IDC_TEXTVIEW       1001
+#define TextRows           52
+#define TextCols           64
+#define TextLineLen        (TextCols + 2)       /* including CR/LF */
+#define TextBufSize        (TextRows * TextLineLen + 1)
+#define TextLabelHeight    20
+
+/*
 **  -----------------------
 **  Private Macro Functions
 **  -----------------------
@@ -86,6 +99,12 @@ static BOOL windowCreate(void);
 static void windowClipboard(HWND hWnd);
 static LRESULT CALLBACK windowProcedure(HWND, UINT, WPARAM, LPARAM);
 void windowDisplay(HWND hWnd);
+static void windowTextViewToggle(HWND hWnd);
+static void windowTextViewLayout(HWND hWnd);
+static void windowTextViewUpdate(void);
+static void windowTextViewSet(int s, char *text, int lines);
+static void windowTextViewMessage(char *msg);
+static LRESULT CALLBACK windowTextViewProcedure(HWND, UINT, WPARAM, LPARAM);
 
 /*
 **  ----------------
@@ -117,6 +136,15 @@ static u8          clipToKeyboardDelay   = 0;
 static DisplayMode displayMode           = ModeCenter;
 static bool        displayModeNeedsErase = FALSE;
 static BOOL        shifted               = FALSE;
+static HWND        hEdit[2]              = { NULL, NULL };
+static HWND        hLabel[2]             = { NULL, NULL };
+static HFONT       hEditFont             = 0;
+static WNDPROC     editProc              = NULL;
+static bool        textViewActive        = FALSE;
+static char        textGrid[2][TextRows][TextCols];
+static char        textBuf[TextBufSize];
+static char        textPrev[2][TextBufSize];
+static int         textPrevLines[2] = { -1, -1 };
 
 
 /*--------------------------------------------------------------------------
@@ -393,6 +421,11 @@ static BOOL windowCreate(void)
     ShowWindow(hWnd, SW_SHOW);
     UpdateWindow(hWnd);
 
+    if (textView)
+        {
+        windowTextViewToggle(hWnd);
+        }
+
     SetTimer(hWnd, TIMER_ID, timerRate, NULL);
 
     return TRUE;
@@ -550,7 +583,22 @@ static LRESULT CALLBACK windowProcedure(HWND hWnd, UINT message, WPARAM wParam, 
             {
             DeleteObject(hPen);
             }
+        if (hEditFont)
+            {
+            DeleteObject(hEditFont);
+            }
         PostQuitMessage(0);
+        break;
+
+    case WM_SIZE:
+        windowTextViewLayout(hWnd);
+        break;
+
+    case WM_SETFOCUS:
+        if (textViewActive)
+            {
+            SetFocus(hEdit[displayMode == ModeRight ? RightScreen : LeftScreen]);
+            }
         break;
 
     case WM_TIMER:
@@ -578,6 +626,12 @@ static LRESULT CALLBACK windowProcedure(HWND hWnd, UINT message, WPARAM wParam, 
                 {
                 clipToKeyboardDelay -= 1;
                 }
+            }
+
+        if (textViewActive)
+            {
+            windowTextViewUpdate();
+            break;
             }
 
         GetClientRect(hWnd, &rt);
@@ -686,6 +740,7 @@ static LRESULT CALLBACK windowProcedure(HWND hWnd, UINT message, WPARAM wParam, 
         case '[':
             displayMode           = ModeLeft;
             displayModeNeedsErase = TRUE;
+            windowTextViewLayout(hWnd);
             break;
 
         case 'R':
@@ -693,17 +748,24 @@ static LRESULT CALLBACK windowProcedure(HWND hWnd, UINT message, WPARAM wParam, 
         case ']':
             displayMode           = ModeRight;
             displayModeNeedsErase = TRUE;
+            windowTextViewLayout(hWnd);
             break;
 
         case 'M':
         case 'm':
         case '\\':
             displayMode = ModeCenter;
+            windowTextViewLayout(hWnd);
             break;
 
         case 'P':
         case 'p':
             windowClipboard(hWnd);
+            break;
+
+        case 'T':
+        case 't':
+            windowTextViewToggle(hWnd);
             break;
 
         case 's':
@@ -748,6 +810,17 @@ void windowDisplay(HWND hWnd)
     HDC     hdcMem;
     HBITMAP hbmMem, hbmOld;
     HFONT   hfntOld;
+
+    if (textViewActive)
+        {
+        /*
+        **  The text view child covers the client area; just validate.
+        */
+        BeginPaint(hWnd, &ps);
+        EndPaint(hWnd, &ps);
+
+        return;
+        }
 
     hdc = BeginPaint(hWnd, &ps);
 
@@ -967,6 +1040,433 @@ void windowDisplay(HWND hWnd)
     DeleteDC(hdcMem);
 
     EndPaint(hWnd, &ps);
+    }
+
+/*--------------------------------------------------------------------------
+**  Purpose:        Toggle the text view on or off, creating the EDIT
+**                  controls and their labels on first use.
+**
+**  Parameters:     Name        Description.
+**                  hWnd        console window handle.
+**
+**  Returns:        Nothing.
+**
+**------------------------------------------------------------------------*/
+static void windowTextViewToggle(HWND hWnd)
+    {
+    static char *labels[2] = { "Left screen", "Right screen" };
+    int         s;
+
+    if (hEdit[LeftScreen] == NULL)
+        {
+        hEditFont = CreateFont(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                               OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                               FIXED_PITCH | FF_MODERN, "Consolas");
+
+        /*
+        **  Each label is created just before its EDIT control so that
+        **  screen readers use it as the control's name.
+        */
+        for (s = 0; s < 2; s++)
+            {
+            hLabel[s] = CreateWindowEx(0, "STATIC", labels[s], WS_CHILD | SS_LEFT,
+                                       0, 0, 0, 0, hWnd, (HMENU)(INT_PTR)(IDC_TEXTVIEW + 2 + s), hInstance, NULL);
+            hEdit[s] = CreateWindowEx(0, "EDIT", "",
+                                      WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_LEFT,
+                                      0, 0, 0, 0, hWnd, (HMENU)(INT_PTR)(IDC_TEXTVIEW + s), hInstance, NULL);
+            if ((hLabel[s] == NULL) || (hEdit[s] == NULL))
+                {
+                MessageBox(hWnd, "Unable to create text view", "(window_win32) CreateWindowEx Error", MB_OK);
+                hEdit[LeftScreen] = NULL;
+
+                return;
+                }
+            if (hEditFont)
+                {
+                SendMessage(hLabel[s], WM_SETFONT, (WPARAM)hEditFont, 0);
+                SendMessage(hEdit[s], WM_SETFONT, (WPARAM)hEditFont, 0);
+                }
+            SendMessage(hEdit[s], EM_SETLIMITTEXT, 0, 0);
+
+            /*
+            **  Subclass the control so keystrokes reach the emulated
+            **  keyboard while the caret keys still navigate the text.
+            */
+            editProc = (WNDPROC)SetWindowLongPtr(hEdit[s], GWLP_WNDPROC, (LONG_PTR)windowTextViewProcedure);
+            }
+
+        SetWindowLongPtr(hWnd, GWL_STYLE, GetWindowLongPtr(hWnd, GWL_STYLE) | WS_CLIPCHILDREN);
+        }
+
+    textViewActive = !textViewActive;
+    if (textViewActive)
+        {
+        textPrevLines[LeftScreen]  = -1;
+        textPrevLines[RightScreen] = -1;
+        windowTextViewLayout(hWnd);
+        SetFocus(hEdit[displayMode == ModeRight ? RightScreen : LeftScreen]);
+        }
+    else
+        {
+        for (s = 0; s < 2; s++)
+            {
+            ShowWindow(hLabel[s], SW_HIDE);
+            ShowWindow(hEdit[s], SW_HIDE);
+            }
+        SetFocus(hWnd);
+        displayModeNeedsErase = TRUE;
+        }
+    }
+
+/*--------------------------------------------------------------------------
+**  Purpose:        Size and show the text view controls for the current
+**                  display mode: both screens side by side, or one of
+**                  them filling the window.
+**
+**  Parameters:     Name        Description.
+**                  hWnd        console window handle.
+**
+**  Returns:        Nothing.
+**
+**------------------------------------------------------------------------*/
+static void windowTextViewLayout(HWND hWnd)
+    {
+    HWND focus;
+    int  height;
+    RECT rect;
+    int  s;
+    bool shown[2];
+    int  width;
+    int  x;
+
+    if ((hEdit[LeftScreen] == NULL) || !textViewActive)
+        {
+        return;
+        }
+
+    shown[LeftScreen]  = displayMode != ModeRight;
+    shown[RightScreen] = displayMode != ModeLeft;
+
+    GetClientRect(hWnd, &rect);
+    width  = rect.right - rect.left;
+    height = rect.bottom - rect.top;
+    if (displayMode == ModeCenter)
+        {
+        width /= 2;
+        }
+
+    x = 0;
+    for (s = 0; s < 2; s++)
+        {
+        if (shown[s])
+            {
+            if (!IsWindowVisible(hEdit[s]))
+                {
+                textPrevLines[s] = -1;
+                }
+            MoveWindow(hLabel[s], x, 0, width, TextLabelHeight, TRUE);
+            MoveWindow(hEdit[s], x, TextLabelHeight, width, height - TextLabelHeight, TRUE);
+            ShowWindow(hLabel[s], SW_SHOW);
+            ShowWindow(hEdit[s], SW_SHOW);
+            x += width;
+            }
+        else
+            {
+            ShowWindow(hLabel[s], SW_HIDE);
+            ShowWindow(hEdit[s], SW_HIDE);
+            }
+        }
+
+    /*
+    **  Do not leave the focus on a hidden control.
+    */
+    focus = GetFocus();
+    if ((focus == hEdit[LeftScreen]) && !shown[LeftScreen])
+        {
+        SetFocus(hEdit[RightScreen]);
+        }
+    else if ((focus == hEdit[RightScreen]) && !shown[RightScreen])
+        {
+        SetFocus(hEdit[LeftScreen]);
+        }
+    }
+
+/*--------------------------------------------------------------------------
+**  Purpose:        Convert the display list into a character grid and
+**                  push each screen to its text view control.
+**
+**  Parameters:     Name        Description.
+**
+**  Returns:        Nothing.
+**
+**------------------------------------------------------------------------*/
+static void windowTextViewUpdate(void)
+    {
+    int      col;
+    DispList *curr;
+    DispList *end;
+    int      lines;
+    int      r;
+    int      s;
+    int      screen;
+    char     *tp;
+    int      x;
+
+    if (opPaused)
+        {
+        listEnd = 0;
+        windowTextViewMessage("Emulation paused");
+
+        return;
+        }
+
+    if (consoleIsRemoteActive())
+        {
+        listEnd = 0;
+        windowTextViewMessage("Remote console active");
+
+        return;
+        }
+
+    if (listEnd == 0)
+        {
+        /*
+        **  Nothing was drawn during this tick; keep the last text.
+        */
+        return;
+        }
+
+    memset(textGrid, ' ', sizeof(textGrid));
+
+    end = display + listEnd;
+    for (curr = display; curr < end; curr++)
+        {
+        if (curr->fontSize == FontDot)
+            {
+            continue;
+            }
+
+        if (curr->xPos >= OffRightScreen)
+            {
+            screen = RightScreen;
+            x      = curr->xPos - OffRightScreen;
+            }
+        else
+            {
+            screen = LeftScreen;
+            x      = curr->xPos - OffLeftScreen;
+            }
+
+        col = x / curr->fontSize;
+        r   = curr->yPos / 10;
+        if ((x < 0) || (col >= TextCols) || (r >= TextRows)
+            || (curr->ch < 0x20) || (curr->ch > 0x7e))
+            {
+            continue;
+            }
+
+        textGrid[screen][r][col] = curr->ch;
+        }
+
+    listEnd  = 0;
+    currentX = -1;
+    currentY = -1;
+
+    /*
+    **  Lay each screen out as fixed-width lines, dropping trailing
+    **  blank rows, so that a line's offset in the control never
+    **  depends on its content.
+    */
+    for (s = 0; s < 2; s++)
+        {
+        lines = 0;
+        for (r = TextRows - 1; r >= 0 && lines == 0; r--)
+            {
+            for (col = 0; col < TextCols; col++)
+                {
+                if (textGrid[s][r][col] != ' ')
+                    {
+                    lines = r + 1;
+                    break;
+                    }
+                }
+            }
+
+        tp = textBuf;
+        for (r = 0; r < lines; r++)
+            {
+            memcpy(tp, textGrid[s][r], TextCols);
+            tp   += TextCols;
+            *tp++ = '\r';
+            *tp++ = '\n';
+            }
+        if (lines > 0)
+            {
+            tp -= 2;
+            }
+        *tp = '\0';
+
+        windowTextViewSet(s, textBuf, lines);
+        }
+    }
+
+/*--------------------------------------------------------------------------
+**  Purpose:        Show a one-line status message in both text views.
+**
+**  Parameters:     Name        Description.
+**                  msg         message text (at most TextCols chars)
+**
+**  Returns:        Nothing.
+**
+**------------------------------------------------------------------------*/
+static void windowTextViewMessage(char *msg)
+    {
+    size_t len = strlen(msg);
+    int    s;
+
+    if (len > TextCols)
+        {
+        len = TextCols;
+        }
+    memset(textBuf, ' ', TextCols);
+    memcpy(textBuf, msg, len);
+    textBuf[TextCols] = '\0';
+    for (s = 0; s < 2; s++)
+        {
+        windowTextViewSet(s, textBuf, 1);
+        }
+    }
+
+/*--------------------------------------------------------------------------
+**  Purpose:        Replace a text view's content, patching only the
+**                  lines that changed and preserving the caret and
+**                  scroll position.
+**
+**  Parameters:     Name        Description.
+**                  s           screen ordinal (LeftScreen/RightScreen)
+**                  text        new content, TextLineLen bytes per line
+**                  lines       number of lines in text
+**
+**  Returns:        Nothing.
+**
+**------------------------------------------------------------------------*/
+static void windowTextViewSet(int s, char *text, int lines)
+    {
+    bool  changed      = FALSE;
+    int   firstVisible = 0;
+    HWND  hw           = hEdit[s];
+    int   i;
+    int   off;
+    char  *prev = textPrev[s];
+    char  save;
+    DWORD selEnd   = 0;
+    DWORD selStart = 0;
+
+    /*
+    **  Hidden controls are left alone; they are refreshed in full when
+    **  shown again.
+    */
+    if ((hw == NULL) || !IsWindowVisible(hw))
+        {
+        return;
+        }
+
+    if (lines != textPrevLines[s])
+        {
+        SendMessage(hw, EM_GETSEL, (WPARAM)&selStart, (LPARAM)&selEnd);
+        firstVisible = (int)SendMessage(hw, EM_GETFIRSTVISIBLELINE, 0, 0);
+        SetWindowText(hw, text);
+        SendMessage(hw, EM_SETSEL, selStart, selEnd);
+        SendMessage(hw, EM_LINESCROLL, 0,
+                    firstVisible - (int)SendMessage(hw, EM_GETFIRSTVISIBLELINE, 0, 0));
+        strcpy(prev, text);
+        textPrevLines[s] = lines;
+
+        return;
+        }
+
+    for (i = 0; i < lines; i++)
+        {
+        off = i * TextLineLen;
+        if (memcmp(text + off, prev + off, TextCols) == 0)
+            {
+            continue;
+            }
+
+        if (!changed)
+            {
+            changed = TRUE;
+            SendMessage(hw, EM_GETSEL, (WPARAM)&selStart, (LPARAM)&selEnd);
+            firstVisible = (int)SendMessage(hw, EM_GETFIRSTVISIBLELINE, 0, 0);
+            }
+
+        save = text[off + TextCols];
+        text[off + TextCols] = '\0';
+        SendMessage(hw, EM_SETSEL, off, off + TextCols);
+        SendMessage(hw, EM_REPLACESEL, FALSE, (LPARAM)(text + off));
+        text[off + TextCols] = save;
+        }
+
+    if (changed)
+        {
+        SendMessage(hw, EM_SETSEL, selStart, selEnd);
+        SendMessage(hw, EM_LINESCROLL, 0,
+                    firstVisible - (int)SendMessage(hw, EM_GETFIRSTVISIBLELINE, 0, 0));
+        strcpy(prev, text);
+        }
+    }
+
+/*--------------------------------------------------------------------------
+**  Purpose:        Subclass procedure for the text view EDIT controls.
+**                  Typed characters go to the emulated keyboard, Tab
+**                  moves between the two screens, Alt keys go to the
+**                  console window, everything else (caret movement,
+**                  copy) is left to the control.
+**
+**  Parameters:     Name        Description.
+**                  hEditWnd    EDIT control handle.
+**                  message     window message.
+**                  wParam      message parameter.
+**                  lParam      message parameter.
+**
+**  Returns:        LRESULT
+**
+**------------------------------------------------------------------------*/
+static LRESULT CALLBACK windowTextViewProcedure(HWND hEditWnd, UINT message, WPARAM wParam, LPARAM lParam)
+    {
+    HWND other;
+
+    switch (message)
+        {
+    case WM_KEYDOWN:
+        if (wParam == VK_TAB)
+            {
+            other = hEdit[hEditWnd == hEdit[LeftScreen] ? RightScreen : LeftScreen];
+            if (IsWindowVisible(other))
+                {
+                SetFocus(other);
+                }
+
+            return 0;
+            }
+        break;
+
+    case WM_CHAR:
+        if ((GetKeyState(VK_CONTROL) & 0x8000) || (wParam == '\t'))
+            {
+            break;
+            }
+        ppKeyIn = (char)wParam;
+
+        return 0;
+
+    case WM_SYSCHAR:
+        windowProcedure(hWnd, message, wParam, lParam);
+
+        return 0;
+        }
+
+    return CallWindowProc(editProc, hEditWnd, message, wParam, lParam);
     }
 
 /*---------------------------  End Of File  ------------------------------*/

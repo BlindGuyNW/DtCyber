@@ -295,6 +295,7 @@ static InitVal sectVals[] =
     { "heightPX",                      "console", "Valid"      },
     { "scaleX",                        "console", "Valid"      },
     { "scaleY",                        "console", "Valid"      },
+    { "textView",                      "console", "Valid"      },
     { "timerRate",                     "console", "Valid"      },
     { "widthPX",                       "console", "Valid"      },
 
@@ -1348,6 +1349,7 @@ static void initConsole(void)
     InitVal *curVal;
     char    fontType[16];
     bool    goodToken = TRUE;
+    char    textViewStr[16];
     int     lineNo    = 0;
     char    *line;
     int     numErrors = 0;
@@ -1379,6 +1381,7 @@ static void initConsole(void)
     scaleY = DefaultScaleY;
 
     timerRate = DefaultTimerRate;
+    textView  = FALSE;
 
 
     /*-------------------START OF PRECHECK-------------------*/
@@ -1575,6 +1578,26 @@ static void initConsole(void)
         }
     printf("(init   )         [scaleX]=%ld\n", scaleX);
     printf("(init   )         [scaleY]=%ld\n", scaleY);
+
+    /*
+    **  textView=yes starts the Windows console window in its screen
+    **  reader friendly text view (Alt+T toggles it at run time).
+    */
+    if (initGetString("textView", "no", textViewStr, sizeof(textViewStr)))
+        {
+        if ((strcasecmp(textViewStr, "yes") == 0) || (strcasecmp(textViewStr, "on") == 0)
+            || (strcasecmp(textViewStr, "true") == 0))
+            {
+            textView = TRUE;
+            }
+        else if ((strcasecmp(textViewStr, "no") != 0) && (strcasecmp(textViewStr, "off") != 0)
+                 && (strcasecmp(textViewStr, "false") != 0))
+            {
+            logDtError(LogErrorLocation, "file '%s' section [%s]: 'textView' must be yes or no.\n", startupFile, console);
+            numErrors += 1;
+            }
+        }
+    printf("(init   )         [textView]=%s\n", textView ? "yes" : "no");
 
     (void)initGetInteger("widthPX", DefaultWidthPX, &widthPX);
     (void)initGetInteger("heightPX", DefaultHeightPX, &heightPX);
