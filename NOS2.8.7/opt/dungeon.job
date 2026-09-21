@@ -3,8 +3,13 @@
 ~*  converted in ../../dungeon. It creates an UPDATE program library
 ~*  from the creation deck, compiles all decks with FTN5, links the
 ~*  absolute program, saves the program, program library and the two
-~*  data files in INSTALL's catalog, then plays a few moves from INPUT
-~*  as a smoke test.
+~*  data files in INSTALL's catalog (dungeon.post moves the program and
+~*  data files to LIBRARY), plays a few moves from INPUT as a smoke
+~*  test (its SAVE leaves a DSAVE in INSTALL's catalog, purged after),
+~*  edits the DUNGEON startup procedure into the PRODUCT file,
+~*  and adds a directive to DIRFILE specifying that PROC/DUNGEON should
+~*  be inserted into the deadstart file library number associated with
+~*  other games.
 ~*
 DUNGEON.
 $USER,INSTALL,${../site.cfg:PASSWORDS:INSTALL:INSTALL}.
@@ -12,10 +17,12 @@ $NORERUN.
 $SETTL,*.
 $SETASL,*.
 $SETJSL,*.
+$COPYBR,INPUT,DIR.
+$COPYBR,INPUT,PROC.
 $COPYBR,INPUT,SOURCE.
 $COPYBR,INPUT,DINDX.
 $COPYBR,INPUT,DTEXT.
-$REWIND,SOURCE,DINDX,DTEXT.
+$REWIND,DIR,PROC,SOURCE,DINDX,DTEXT.
 $UPDATE,P=0,N=DUNGPL,C=COMPILE,F,I=SOURCE.
 $REWIND,COMPILE.
 $FTN5,I=COMPILE,L=OUTPUT,B=LGO.
@@ -26,7 +33,10 @@ $PURGE,DUNGEON,DUNGPL,DINDX,DTEXT/NA.
 $SAVE,DUNGEON,DUNGPL,DINDX,DTEXT.
 $REWIND,DUNGEON,DINDX,DTEXT.
 DUNGEON.
-$ENQUIRE,F.
+$PURGE,DSAVE/NA.
+$ATTACH,PRODUCT,DIRFILE/M=W,WB.
+$LIBEDIT,P=PRODUCT,B=PROC,I=0,C.
+$LIBEDIT,P=DIRFILE,B=DIR,I=0,C.
 ***
 *** DUNGEON COMPLETE
 ***
@@ -34,6 +44,11 @@ EXIT.
 ***
 *** DUNGEON FAILED
 ***
+~eor
+DUNGEON
+*ADD LIB${1},PROC/DUNGEON
+~eor
+~include dungeon.proc
 ~eor
 ~include ../../dungeon/nos/dungeon.upd
 ~eor
@@ -46,6 +61,8 @@ INVENTORY
 OPEN MAILBOX
 TAKE LEAFLET
 READ LEAFLET
+HELLO
+TAKE MAILBOX
 SAVE
 DROP LEAFLET
 INVENTORY

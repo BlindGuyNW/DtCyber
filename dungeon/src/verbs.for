@@ -1641,8 +1641,15 @@ C
 	WRITE(1) AROOM,ASCORE,AVEHIC,ASTREN,AFLAG
 	WRITE(1) FLAGS,SWITCH,VPROB,CFLAG,CTICK,CCNCEL
 C
-	CALL RSPEAK(597)
+	REWIND 1				! NOS: flush before REPLACE (FTN5 8-2).
 	CLOSE(UNIT=1,STATUS='KEEP')
+C NOS: keep the save in the player's permanent file catalog, so it
+C outlives the session like a file on VMS would.  NA and RC make PF
+C return a code instead of aborting the game (FTN5 manual table 8-1).
+	CALL PF('REPLACE',FNAME(1:NBLEN(FNAME)),FNAME(1:NBLEN(FNAME)),
+	1	'NA','N','RC',RC)
+	IF(RC.NE.0) GO TO 100
+	CALL RSPEAK(597)
 	RETURN
 C
 100	CALL RSPEAK(598)			! cant do it.
@@ -1660,6 +1667,11 @@ C
 	LOGICAL SVNAME
 C
 	IF(.NOT.SVNAME(FNAME)) GO TO 100	! NOS: get a legal file name.
+C NOS: fetch the save from the player's catalog (see SAVEGM).  A
+C nonzero code means there is no such file, or it can't be read.
+	CALL PF('GET',FNAME(1:NBLEN(FNAME)),FNAME(1:NBLEN(FNAME)),
+	1	'NA','N','RC',RC)
+	IF(RC.NE.0) GO TO 100
 	OPEN (UNIT=1,FILE=FNAME(1:NBLEN(FNAME)),ACCESS='SEQUENTIAL',
 	1	STATUS='OLD',FORM='UNFORMATTED',ERR=100)
 	REWIND 1				! NOS: OPEN keeps the position.
@@ -1692,8 +1704,9 @@ C
 C SVNAME- NOS: pick the save file name
 C
 C The player may give a file name with SAVE or RESTORE (it arrives in
-C SUBBUF).  A NOS local file name is 1 to 7 letters and digits starting
-C with a letter; anything else is refused.  The default is DSAVE.
+C SUBBUF).  It is used as both the local and the permanent file name,
+C so it must be 1 to 7 letters and digits starting with a letter;
+C anything else is refused.  The default is DSAVE.
 C
 	LOGICAL FUNCTION SVNAME(FNAME)
 	IMPLICIT INTEGER (A-Z)
