@@ -133,7 +133,7 @@ C
 C
 	TYPE 100,A,B				! gonzo
 	IF(DBGFLG.NE.0) RETURN
-	SUBBUF='CRASH.DAT'			! set up crash save name.
+	SUBBUF='CRASH'			! set up crash save name.
 	SUBLNT=NBLEN(SUBBUF)
 	CALL SAVEGM				! do final save.
 	TYPE 200
