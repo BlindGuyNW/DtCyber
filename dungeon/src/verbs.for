@@ -1844,7 +1844,10 @@ C
 	XSTRNG=890				! bad idea.
 	RETURN
 C
-3200	IF(OADV(LAMP).NE.WINNER) GO TO 3300	! no lamp?
+C FIX: V3.0A had .NE. here, which refused the climb when the lamp
+C was carried and allowed it when it wasn't; 446 is "Aren't you
+C forgetting something?", i.e. the lamp, as in Dungeon 2.6.
+3200	IF(OADV(LAMP).EQ.WINNER) GO TO 3300	! got lamp?
 	XSTRNG=446				! bad idea.
 	RETURN
 C
