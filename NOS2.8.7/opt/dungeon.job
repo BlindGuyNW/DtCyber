@@ -1,0 +1,51 @@
+~*
+~*  This job builds DUNGEON (the FORTRAN Zork, V3.0A) from the source
+~*  converted in ../../dungeon. It creates an UPDATE program library
+~*  from the creation deck, compiles all decks with FTN5, links the
+~*  absolute program, saves the program, program library and the two
+~*  data files in INSTALL's catalog, then plays a few moves from INPUT
+~*  as a smoke test.
+~*
+DUNGEON.
+$USER,INSTALL,${../site.cfg:PASSWORDS:INSTALL:INSTALL}.
+$NORERUN.
+$SETTL,*.
+$SETASL,*.
+$SETJSL,*.
+$COPYBR,INPUT,SOURCE.
+$COPYBR,INPUT,DINDX.
+$COPYBR,INPUT,DTEXT.
+$REWIND,SOURCE,DINDX,DTEXT.
+$UPDATE,P=0,N=DUNGPL,C=COMPILE,F,I=SOURCE.
+$REWIND,COMPILE.
+$FTN5,I=COMPILE,L=OUTPUT,B=LGO.
+$REWIND,LGO.
+$LOAD,LGO.
+$NOGO,DUNGEON.
+$PURGE,DUNGEON,DUNGPL,DINDX,DTEXT/NA.
+$SAVE,DUNGEON,DUNGPL,DINDX,DTEXT.
+$REWIND,DUNGEON,DINDX,DTEXT.
+DUNGEON.
+***
+*** DUNGEON COMPLETE
+***
+EXIT.
+***
+*** DUNGEON FAILED
+***
+~eor
+~include ../../dungeon/nos/dungeon.upd
+~eor
+~include ../../dungeon/nos/dindx.txt
+~eor
+~include ../../dungeon/nos/dtext.txt
+~eor
+LOOK
+INVENTORY
+OPEN MAILBOX
+TAKE LEAFLET
+READ LEAFLET
+SCORE
+TIME
+QUIT
+Y
